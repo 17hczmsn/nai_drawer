@@ -1,0 +1,97 @@
+﻿{
+  "name": "nai_drawer",
+  "display_name": "NAI Drawer",
+  "version": "0.1.0",
+  "description": "NovelAI 绘图插件，支持 /tag、/nai、角色参考、画风参考、自拍角色与 Vibe 预设。",
+  "author": "tuercha",
+  "dependencies": {
+    "plugins": [],
+    "components": []
+  },
+  "include": [
+    {
+      "component_type": "command",
+      "component_name": "tag",
+      "dependencies": [],
+      "enabled": true
+    },
+    {
+      "component_type": "command",
+      "component_name": "nai",
+      "dependencies": [],
+      "enabled": true
+    },
+    {
+      "component_type": "command",
+      "component_name": "保存角色",
+      "dependencies": [],
+      "enabled": true
+    },
+    {
+      "component_type": "command",
+      "component_name": "参考",
+      "dependencies": [],
+      "enabled": true
+    },
+    {
+      "component_type": "command",
+      "component_name": "自拍角色",
+      "dependencies": [],
+      "enabled": true
+    },
+    {
+      "component_type": "command",
+      "component_name": "自拍",
+      "dependencies": [],
+      "enabled": true
+    },
+    {
+      "component_type": "command",
+      "component_name": "保存画风",
+      "dependencies": [],
+      "enabled": true
+    },
+    {
+      "component_type": "command",
+      "component_name": "加载画风",
+      "dependencies": [],
+      "enabled": true
+    },
+    {
+      "component_type": "command",
+      "component_name": "Vibe",
+      "dependencies": [],
+      "enabled": true
+    },
+    {
+      "component_type": "event_handler",
+      "component_name": "character_setup_handler",
+      "dependencies": [],
+      "enabled": true
+    },
+    {
+      "component_type": "event_handler",
+      "component_name": "vibe_setup_handler",
+      "dependencies": [],
+      "enabled": true
+    },
+    {
+      "component_type": "tool",
+      "component_name": "draw_image",
+      "dependencies": [],
+      "enabled": true
+    },
+    {
+      "component_type": "config",
+      "component_name": "config",
+      "dependencies": [],
+      "enabled": true
+    }
+  ],
+  "entry_point": "plugin.py",
+  "min_core_version": "1.0.0",
+  "python_dependencies": [
+    "httpx>=0.28.0"
+  ],
+  "dependencies_required": true
+}

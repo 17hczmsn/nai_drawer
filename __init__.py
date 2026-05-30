@@ -1,0 +1,2 @@
+"""NovelAI image drawing plugin."""
+
