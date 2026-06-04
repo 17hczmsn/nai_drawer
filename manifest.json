@@ -2,7 +2,7 @@
   "name": "nai_drawer",
   "display_name": "NAI Drawer",
   "version": "0.2.0",
-  "description": "NovelAI 绘图插件，仅保留 /nai 指令；角色参考、Vibe 与画风在 config.toml 中配置。",
+  "description": "NovelAI 绘图插件，支持 /nai 单人绘图、/naim 多人绘图、角色参考、Vibe 与画风配置。",
   "author": "tuercha、阿巴",
   "dependencies": {
     "plugins": [],
@@ -16,8 +16,20 @@
       "enabled": true
     },
     {
+      "component_type": "command",
+      "component_name": "naim",
+      "dependencies": [],
+      "enabled": true
+    },
+    {
       "component_type": "action",
-      "component_name": "draw_image",
+      "component_name": "draw_single_image",
+      "dependencies": [],
+      "enabled": true
+    },
+    {
+      "component_type": "action",
+      "component_name": "draw_multi_image",
       "dependencies": [],
       "enabled": true
     },
@@ -31,7 +43,8 @@
   "entry_point": "plugin.py",
   "min_core_version": "1.0.0",
   "python_dependencies": [
-    "httpx>=0.28.0"
+    "httpx>=0.28.0",
+    "numpy>=1.26.0"
   ],
   "dependencies_required": true
 }

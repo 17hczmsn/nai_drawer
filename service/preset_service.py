@@ -56,6 +56,40 @@ def _iter_vibe_presets(config: NaiDrawerConfig) -> dict[str, VibePresetEntry]:
     return presets
 
 
+def _find_character_name_in_text(user_text: str, characters: dict[str, CharacterPresetEntry]) -> str:
+    """从用户文本中匹配角色预设名或别名。"""
+    if not user_text:
+        return ""
+    normalized_text = user_text.lower()
+    for name, entry in characters.items():
+        if name and name.lower() in normalized_text:
+            return name
+        for alias in entry.alias_names:
+            if alias and alias.lower() in normalized_text:
+                return name
+    return ""
+
+
+def _is_selfie_request(user_text: str, config: NaiDrawerConfig) -> bool:
+    """判断用户请求是否为自拍/你的照片类型的请求。"""
+    if not user_text:
+        return False
+    normalized_text = user_text.lower()
+    selfie_keywords = [keyword.lower() for keyword in config.bot.selfie_keywords if keyword]
+    if any(keyword in normalized_text for keyword in selfie_keywords):
+        return True
+
+    selfie_nouns = ["照片", "自拍", "照", "写真", "photo", "picture", "portrait"]
+    selfie_pronouns = ["你", "你的", "你给我", "给我你", "给我看你", "看看你", "看你"]
+    if any(noun in normalized_text for noun in selfie_nouns) and any(pronoun in normalized_text for pronoun in selfie_pronouns):
+        return True
+
+    if any(noun in normalized_text for noun in selfie_nouns) and "我的" not in normalized_text and "我" not in normalized_text and "你" in normalized_text:
+        return True
+
+    return False
+
+
 async def ensure_character_ready(name: str, entry: CharacterPresetEntry, config: NaiDrawerConfig) -> dict[str, Any]:
     """确保角色参考已复制到 data 目录。"""
 
@@ -159,16 +193,12 @@ async def build_reference_payload(config: NaiDrawerConfig, user_text: str) -> tu
     characters = _iter_character_presets(config)
     vibes = _iter_vibe_presets(config)
 
-    # 优先级 1：用户文本中包含角色预设名
-    character_name = ""
-    for name in characters:
-        if name in user_text:
-            character_name = name
-            break
+    # 优先级 1：用户文本中包含角色预设名或别名
+    character_name = _find_character_name_in_text(user_text, characters)
 
     # 优先级 2：自拍场景加载 characters.selfie
     if not character_name:
-        selfie = any(keyword and keyword in user_text for keyword in config.bot.selfie_keywords)
+        selfie = _is_selfie_request(user_text, config)
         if selfie:
             character_name = config.characters.selfie.strip()
 

@@ -1,4 +1,4 @@
-"""/nai 指令入口。"""
+"""/nai 和 /naim 指令入口。"""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ def _queue_draw_task(
 
     task_info = get_task_manager().create_task(
         coro,
-        name="nai_drawer_nai",
+        name=f"nai_drawer_{command.command_name}",
         daemon=False,
         timeout=None,
         group_name="nai_drawer",
@@ -32,10 +32,10 @@ def _queue_draw_task(
 
 
 class NaiDrawCommand(BaseCommand):
-    """把自然语言转换为英文 tag 后生成图片。"""
+    """单人绘图：把自然语言转换为英文 tag 后生成图片。"""
 
     command_name = "nai"
-    command_description = "使用 /nai <自然语言描述> 转换并生成图片"
+    command_description = "使用 /nai <自然语言描述> 生成单人图片"
     command_prefix = "/"
 
     async def execute(self, message_text: str) -> tuple[bool, str]:
@@ -49,24 +49,69 @@ class NaiDrawCommand(BaseCommand):
             return False, "插件配置类型不匹配"
         if not config.enabled:
             return False, "插件已关闭"
-        return _queue_draw_task(self, draw_from_natural_language(config, self.stream_id, text))
+        return _queue_draw_task(self, draw_from_natural_language(config, self.stream_id, text, multi_mode=False))
 
     @cmd_route()
     async def draw(self, text: str = "") -> tuple[bool, str]:
         if not text.strip():
-            return False, "用法：/nai 一个白裙女孩站在森林里"
+            return False, "用法：/nai <自然语言描述>\n示例：/nai 一个白裙女孩站在森林里，柔和光线"
         config = self.plugin.config
         if not isinstance(config, NaiDrawerConfig):
             return False, "插件配置类型不匹配"
         if not config.enabled:
             return False, "插件已关闭"
-        return await draw_from_natural_language(config, self.stream_id, text)
+        return await draw_from_natural_language(config, self.stream_id, text, multi_mode=False)
 
     @cmd_route("help")
     async def help(self) -> tuple[bool, str]:
         message = (
             "用法：/nai <自然语言描述>\n"
-            "示例：/nai 一个白裙女孩站在森林里，柔和光线\n"
+            "单人绘图，支持角色参考图。\n"
+            "示例：/nai 一个白裙女孩站在森林里，柔和光线\n\n"
+            "多人绘图请使用 /naim\n"
             "角色参考、Vibe、画风请在 config/plugins/nai_drawer/config.toml 中配置。"
+        )
+        return True, message
+
+
+class NaiMultiDrawCommand(BaseCommand):
+    """多人绘图：把自然语言转换为英文 tag 后生成多人图片。"""
+
+    command_name = "naim"
+    command_description = "使用 /naim <自然语言描述> 生成多人图片"
+    command_prefix = "/"
+
+    async def execute(self, message_text: str) -> tuple[bool, str]:
+        text = message_text.strip()
+        if text in {"help", "-h", "--help"}:
+            return await self.help()
+        if not text:
+            return await self.draw(text)
+        config = self.plugin.config
+        if not isinstance(config, NaiDrawerConfig):
+            return False, "插件配置类型不匹配"
+        if not config.enabled:
+            return False, "插件已关闭"
+        return _queue_draw_task(self, draw_from_natural_language(config, self.stream_id, text, multi_mode=True))
+
+    @cmd_route()
+    async def draw(self, text: str = "") -> tuple[bool, str]:
+        if not text.strip():
+            return False, "用法：/naim <自然语言描述>\n示例：/naim 蕾耶拉和希娜在花园里拥抱"
+        config = self.plugin.config
+        if not isinstance(config, NaiDrawerConfig):
+            return False, "插件配置类型不匹配"
+        if not config.enabled:
+            return False, "插件已关闭"
+        return await draw_from_natural_language(config, self.stream_id, text, multi_mode=True)
+
+    @cmd_route("help")
+    async def help(self) -> tuple[bool, str]:
+        message = (
+            "用法：/naim <自然语言描述>\n"
+            "多人绘图，不使用角色参考图，仅使用用户描述的角色特征。\n"
+            "示例：/naim 蕾耶拉和希娜在花园里拥抱\n\n"
+            "单人绘图请使用 /nai\n"
+            "画风请在 config/plugins/nai_drawer/config.toml 中配置。"
         )
         return True, message

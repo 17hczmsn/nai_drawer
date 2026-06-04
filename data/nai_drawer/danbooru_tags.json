@@ -1,0 +1,155 @@
+{
+  "tags": [
+    {
+      "tag": "leylah_(honkai_impact)",
+      "cn_name": "蕾耶拉, leylah",
+      "category": "Character",
+      "aliases": [
+        "蕾耶拉",
+        "leylah"
+      ]
+    },
+    {
+      "tag": "senadina",
+      "cn_name": "希娜狄雅, senadina",
+      "category": "Character",
+      "aliases": [
+        "希娜狄雅",
+        "希娜",
+        "senadina"
+      ]
+    },
+    {
+      "tag": "erdos_helia",
+      "cn_name": "赫丽娅, 赫莉娅, erdos helia",
+      "category": "Character",
+      "aliases": [
+        "赫丽娅",
+        "赫莉娅",
+        "helia",
+        "erdos helia"
+      ]
+    },
+    {
+      "tag": "coralie_6626_planck",
+      "cn_name": "科拉莉, coralie, coralie 6626 planck",
+      "category": "Character",
+      "aliases": [
+        "科拉莉",
+        "coralie",
+        "coralie 6626 planck"
+      ]
+    },
+    {
+      "tag": "songque",
+      "cn_name": "松雀, songque",
+      "category": "Character",
+      "aliases": [
+        "松雀",
+        "songque"
+      ]
+    },
+    {
+      "tag": "thelema_nutriscu",
+      "cn_name": "瑟莉姆, 瑟利姆, thelema nutriscu",
+      "category": "Character",
+      "aliases": [
+        "瑟莉姆",
+        "瑟利姆",
+        "thelema",
+        "thelema nutriscu"
+      ]
+    },
+    {
+      "tag": "honkai_impact_3rd",
+      "cn_name": "崩坏3, 崩坏3rd, honkai impact 3rd, honkai impact",
+      "category": "Copyright",
+      "aliases": [
+        "崩坏3",
+        "崩坏3rd",
+        "honkai impact",
+        "honkai impact 3rd"
+      ]
+    },
+    {
+      "tag": "honkai_(series)",
+      "cn_name": "崩坏,崩坏3,星穹铁道,逆熵",
+      "category": "Copyright",
+      "aliases": [],
+      "source": "online_cache",
+      "score": 1.057
+    },
+    {
+      "tag": "battle",
+      "cn_name": "战斗,战斗场景,动作",
+      "category": "General",
+      "aliases": [],
+      "source": "online_cache",
+      "score": 1.0424
+    },
+    {
+      "tag": "fighting",
+      "cn_name": "战斗,动作",
+      "category": "General",
+      "aliases": [],
+      "source": "online_cache",
+      "score": 1.04
+    },
+    {
+      "tag": "long_sword",
+      "cn_name": "长剑,武器,剑类",
+      "category": "General",
+      "aliases": [],
+      "source": "online_cache",
+      "score": 1.0182
+    },
+    {
+      "tag": "yuri",
+      "cn_name": "百合,女女,女同性恋,GL",
+      "category": "General",
+      "aliases": [],
+      "source": "online_cache",
+      "score": 1.0669
+    },
+    {
+      "tag": "lily_(flower)",
+      "cn_name": "百合 (花),花朵,植物",
+      "category": "General",
+      "aliases": [],
+      "source": "online_cache",
+      "score": 0.917
+    },
+    {
+      "tag": "battle_axe",
+      "cn_name": "战斧,斧头,武器",
+      "category": "General",
+      "aliases": [],
+      "source": "online_cache",
+      "score": 1.077
+    },
+    {
+      "tag": "holding",
+      "cn_name": "手持,手部,手持物品,动词/动名词,拿握",
+      "category": "General",
+      "aliases": [],
+      "source": "online_cache",
+      "score": 1.0682
+    },
+    {
+      "tag": "holding_controller",
+      "cn_name": "持手柄,游戏道具",
+      "category": "General",
+      "aliases": [],
+      "source": "online_cache",
+      "score": 0.9481
+    },
+    {
+      "tag": "holding_axe",
+      "cn_name": "持斧,手持武器,斧头",
+      "category": "General",
+      "aliases": [],
+      "source": "online_cache",
+      "score": 0.8397
+    }
+  ]
+}

@@ -33,6 +33,14 @@ class CharacterPresetEntry(SectionBase):
     )
     fidelity: float = Field(default=1.0, ge=0.0, le=1.0, description="保真度。", label="保真度", tag="ai")
     strength: float = Field(default=1.0, ge=0.0, le=1.0, description="参考强度。", label="参考强度", tag="ai")
+    alias_names: list[str] = Field(
+        default_factory=list,
+        description="别名列表，用户可能使用的其他称呼。",
+        label="别名列表",
+        tag="text",
+        input_type="list",
+        item_type="str",
+    )
     enabled: bool = Field(default=True, description="是否启用该预设。", label="启用", tag="plugin")
 
 
@@ -76,6 +84,151 @@ class NaiDrawerConfig(BaseConfig):
         label="启用插件",
         tag="plugin",
     )
+
+    @config_section("tag_retriever", title="Danbooru Tag 检索增强", tag="ai")
+    class TagRetrieverSection(SectionBase):
+        """Danbooru Tag 候选检索配置，可大幅提升生成 tag 的质量和规范性。"""
+
+        enabled: bool = Field(
+            default=False,
+            description="是否启用 Danbooru Tag 检索增强；开启后会在翻译前查询候选标签注入系统提示词。",
+            label="启用 Tag 检索",
+            tag="plugin",
+        )
+
+        mode: str = Field(
+            default="online",
+            description="检索模式：'online'（HF Space API，推荐首选）| 'local'（本地向量，需预构建数据）。",
+            label="检索模式",
+            input_type="select",
+            choices=["online", "local"],
+            tag="plugin",
+        )
+
+        api_url: str = Field(
+            default="https://sakizuki-danboorusearch.hf.space/api",
+            description="DanbooruSearchOnline API 基础地址（仅 online 模式）。",
+            label="API 地址",
+            tag="network",
+        )
+
+        timeout: float = Field(
+            default=90.0,
+            ge=10.0,
+            le=300.0,
+            description="API 请求超时时间，单位秒（仅 online 模式）。",
+            label="API 超时",
+            tag="network",
+        )
+
+        search_limit: int = Field(
+            default=30,
+            ge=5,
+            le=100,
+            description="语义搜索结果的上限条数（仅 online 模式）。",
+            label="搜索结果数",
+            tag="ai",
+        )
+
+        search_top_k: int = Field(
+            default=5,
+            ge=1,
+            le=50,
+            description="语义搜索每个分词段的召回数（仅 online 模式）。",
+            label="搜索召回数",
+            tag="ai",
+        )
+
+        related_limit: int = Field(
+            default=20,
+            ge=5,
+            le=100,
+            description="共现推荐结果的上限条数（仅 online 模式）。",
+            label="推荐结果数",
+            tag="ai",
+        )
+
+        related_seed_count: int = Field(
+            default=8,
+            ge=1,
+            le=20,
+            description="用多少个搜索结果作为共现推荐的种子（仅 online 模式）。",
+            label="推荐种子数",
+            tag="ai",
+        )
+
+        show_nsfw: bool = Field(
+            default=True,
+            description="是否包含 NSFW/R-18 标签。",
+            label="显示 NSFW 标签",
+            tag="ai",
+        )
+
+        popularity_weight: float = Field(
+            default=0.15,
+            ge=0.0,
+            le=1.0,
+            description="标签热度对搜索排序的影响权重（0 = 纯语义，1 = 纯热度，仅 online 模式）。",
+            label="热度权重",
+            tag="ai",
+        )
+
+        top_k: int = Field(
+            default=50,
+            ge=10,
+            le=200,
+            description="本地向量搜索返回的候选数量（仅 local 模式）。",
+            label="返回候选数",
+            tag="ai",
+        )
+
+        min_score: float = Field(
+            default=0.05,
+            ge=0.0,
+            le=1.0,
+            description="本地搜索的最小相似度阈值，低于此分数的候选被过滤（仅 local 模式）。",
+            label="最小相似度",
+            tag="ai",
+        )
+
+        cache_online_results: bool = Field(
+            default=True,
+            description="online 模式检索成功后，将高分搜索结果缓存到本地向量库，供 local 模式和在线降级复用。",
+            label="缓存 Online 搜索结果",
+            tag="storage",
+        )
+
+        cache_min_score: float = Field(
+            default=0.45,
+            ge=0.0,
+            le=1.0,
+            description="online 搜索结果写入本地向量库的最低相关度。",
+            label="缓存最低相关度",
+            tag="storage",
+        )
+
+        cache_related_results: bool = Field(
+            default=False,
+            description="是否缓存共现推荐结果；默认关闭，避免把同作品其它角色写入本地库。",
+            label="缓存共现推荐",
+            tag="storage",
+        )
+
+        cache_max_items: int = Field(
+            default=5000,
+            ge=100,
+            le=100000,
+            description="本地在线缓存最多保留的 tag 条数，已存在的手动条目优先保留。",
+            label="缓存最大条数",
+            tag="storage",
+        )
+
+        suppress_character_tags_when_reference: bool = Field(
+            default=True,
+            description="命中角色参考图时，自动移除最终提示词中对应的 Danbooru 角色 tag，避免模型内置角色形态覆盖参考图。",
+            label="角色参考时移除角色 Tag",
+            tag="ai",
+        )
 
     @config_section("draw_api", title="绘图接口", tag="network")
     class DrawApiSection(SectionBase):
@@ -154,6 +307,14 @@ class NaiDrawerConfig(BaseConfig):
             description="提示词转换失败（空内容或解析错误）时的最大重试次数。",
             label="最大重试次数",
             tag="performance",
+        )
+        prompt_prefix: str = Field(
+            default="",
+            description="破甲词，自动追加到翻译模型系统提示词末尾，用于引导翻译模型产出更高质量的结果。",
+            label="破甲词",
+            input_type="textarea",
+            rows=2,
+            tag="text",
         )
 
     @config_section("style", title="画风", tag="ai")
@@ -283,12 +444,13 @@ class NaiDrawerConfig(BaseConfig):
         )
 
     draw_api: DrawApiSection = Field(default_factory=DrawApiSection)
+    generation: GenerationSection = Field(default_factory=GenerationSection)
     prompt: PromptSection = Field(default_factory=PromptSection)
     style: StyleSection = Field(default_factory=StyleSection)
     bot: BotSection = Field(default_factory=BotSection)
     characters: CharactersSection = Field(default_factory=CharactersSection)
     vibes: VibesSection = Field(default_factory=VibesSection)
-    generation: GenerationSection = Field(default_factory=GenerationSection)
+    tag_retriever: TagRetrieverSection = Field(default_factory=TagRetrieverSection)
 
 
 # ---------------------------------------------------------------------------

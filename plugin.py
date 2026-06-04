@@ -8,8 +8,8 @@ from src.app.plugin_system.api.log_api import get_logger
 from src.app.plugin_system.base import BasePlugin, register_plugin
 from src.kernel.concurrency import get_task_manager
 
-from .action import DrawImageAction
-from .command import NaiDrawCommand
+from .action import DrawMultiImageAction, DrawSingleImageAction
+from .command import NaiDrawCommand, NaiMultiDrawCommand
 from .config import NaiDrawerConfig
 from .service import warm_up_presets
 
@@ -30,7 +30,7 @@ class NaiDrawerPlugin(BasePlugin):
     def get_components(self) -> list[type]:
         """返回插件组件类。"""
 
-        return [NaiDrawCommand, DrawImageAction]
+        return [NaiDrawCommand, NaiMultiDrawCommand, DrawSingleImageAction, DrawMultiImageAction]
 
     async def on_plugin_loaded(self) -> None:
         """插件加载后预热预设。"""

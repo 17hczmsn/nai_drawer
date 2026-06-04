@@ -10,7 +10,11 @@ from typing import Any
 
 import httpx
 
+from src.app.plugin_system.api.log_api import get_logger
+
 from ..config import NaiDrawerConfig
+
+logger = get_logger("nai_drawer")
 
 _IMG_RE = re.compile(r"!\[[^\]]*\]\((data:image/[^;)]+;base64,[^)]+)\)")
 _SEED_RE = re.compile(r"<!--\s*seeds:(\[.*?\])\s*-->")
@@ -104,8 +108,13 @@ async def generate_image(
     prompt: str,
     config: NaiDrawerConfig,
     extra_payload: dict[str, Any] | None = None,
+    max_retries: int = 2,
 ) -> DrawResult:
-    """调用 NovelAI 兼容接口生成一张图片。"""
+    """调用 NovelAI 兼容接口生成一张图片。
+
+    对网络层错误（连接断开、超时等）自动重试最多 max_retries 次，
+    以应对 API 服务器关闭空闲连接导致的首次请求失败。
+    """
 
     validate_prompt(prompt)
 
@@ -143,18 +152,25 @@ async def generate_image(
         "Content-Type": "application/json",
     }
 
-    try:
-        async with httpx.AsyncClient(timeout=api.timeout_seconds) as client:
-            response = await client.post(
-                _build_chat_url(api.base_url),
-                headers=headers,
-                json=body,
-            )
-    except httpx.RequestError as exc:
-        raise ImageDrawerError(f"绘图请求失败：{exc}") from exc
+    for attempt in range(1 + max_retries):
+        try:
+            async with httpx.AsyncClient(timeout=api.timeout_seconds) as client:
+                response = await client.post(
+                    _build_chat_url(api.base_url),
+                    headers=headers,
+                    json=body,
+                )
+        except httpx.RequestError as exc:
+            if attempt < max_retries:
+                logger.warning(f"绘图请求网络错误（第 {attempt + 1} 次），重试中：{exc}")
+                continue
+            raise ImageDrawerError(f"绘图请求失败（已重试 {max_retries} 次）：{exc}") from exc
 
-    if response.status_code >= 400:
-        raise ImageDrawerError(f"绘图接口返回 {response.status_code}：{_parse_error_response(response)}")
+        # HTTP 错误不重试（4xx/5xx 是业务层问题）
+        if response.status_code >= 400:
+            raise ImageDrawerError(f"绘图接口返回 {response.status_code}：{_parse_error_response(response)}")
+
+        break
 
     payload = response.json()
     try:
