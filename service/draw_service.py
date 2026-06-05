@@ -10,7 +10,7 @@ from typing import Any
 from src.app.plugin_system.api.log_api import get_logger
 from src.app.plugin_system.api.send_api import send_image
 
-from ..client import ImageDrawerError, convert_to_english_prompt, generate_image
+from ..client import ImageDrawerError, convert_to_english_prompt, generate_image, validate_prompt
 from ..config import NaiDrawerConfig
 from ..constants import PROMPT_CONVERSION_SYSTEM, PROMPT_CONVERSION_SYSTEM_MULTI
 from .preset_service import PresetServiceError, build_reference_payload
@@ -136,15 +136,25 @@ async def prepare_prompt(
     stream_id: str,
     text: str,
     multi_mode: bool = False,
+    raw_tags_mode: bool = False,
 ) -> tuple[str, dict[str, Any]]:
     """必要时转换自然语言，并返回英文 prompt 与多人场景附加参数。
 
     Args:
         config: 插件配置
         stream_id: 聊天流 ID
-        text: 自然语言描述
+        text: 自然语言描述或纯英文 Danbooru tags
         multi_mode: 是否为多人模式；多人模式使用多人专用系统提示词
+        raw_tags_mode: 是否跳过翻译模型，直接使用用户输入的英文 tags
     """
+
+    if raw_tags_mode:
+        prompt = text.strip()
+        if not prompt:
+            raise ImageDrawerError("英文 tag 不能为空。")
+        validate_prompt(prompt)
+        logger.info("收到，使用纯英文 tag 直通模式，跳过提示词转换。")
+        return prompt, {}
 
     prompt_text = _enrich_with_persona(text, config)
 
@@ -226,20 +236,28 @@ async def draw_from_natural_language(
     text: str,
     original_text: str = "",
     multi_mode: bool = False,
+    raw_tags_mode: bool = False,
 ) -> tuple[bool, str]:
     """执行完整的绘图流程（Command 和 Action 共用）。
 
     Args:
         config: 插件配置
         stream_id: 聊天流 ID
-        text: 自然语言画面描述（可能是 LLM 重写后的）
+        text: 自然语言画面描述（可能是 LLM 重写后的）或纯英文 Danbooru tags
         original_text: 原始用户消息文本，用于角色名匹配；留空则使用 text
         multi_mode: 是否为多人模式；多人模式下不加载角色参考，使用多人专用提示词
+        raw_tags_mode: 是否跳过翻译模型，直接使用用户输入的英文 tags
     """
 
     ref_text = original_text.strip() or text
     try:
-        prompt, multi_payload = await prepare_prompt(config, stream_id, text, multi_mode=multi_mode)
+        prompt, multi_payload = await prepare_prompt(
+            config,
+            stream_id,
+            text,
+            multi_mode=multi_mode,
+            raw_tags_mode=raw_tags_mode,
+        )
         # 多人模式下不加载角色参考
         if multi_mode:
             ref_payload, ref_labels = {}, []

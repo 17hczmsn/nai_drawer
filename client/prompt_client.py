@@ -13,7 +13,7 @@ from src.app.plugin_system.api.log_api import get_logger
 from src.kernel.llm import LLMPayload, ROLE, Text
 
 from ..config import NaiDrawerConfig
-from ..constants import PROMPT_CONVERSION_SYSTEM
+from ..constants import PROMPT_CONVERSION_SYSTEM, PROMPT_CONVERSION_SYSTEM_MULTI
 from .image_client import ImageDrawerError, validate_prompt
 from .tag_candidate_resolver import TagCandidateResolver
 
@@ -37,6 +37,228 @@ _TAG_TOKEN_RE = re.compile(
     r"\{+([^{}]+)\}+|(?<![a-z0-9_])([a-z0-9_]+(?:\s*\([^)]*\))?)(?![a-z0-9_])",
     re.IGNORECASE,
 )
+_FINAL_OUTPUT_MARKER_RE = re.compile(
+    r"(?:最终(?:输出|答案|结果)|final(?:\s+(?:answer|output|result))?|output|result)\s*[:：]\s*([\s\S]+)$",
+    re.IGNORECASE,
+)
+_MULTI_COUNT_RE = re.compile(r"^(?:[2-9]girls?|[2-9]boys?|[1-9]boys?\s+[1-9]girls?|[1-9]girls?\s+[1-9]boys?|group)$")
+_REASONING_TAG_STOPWORDS = {
+    "b3",
+    "d3",
+    "danbooru",
+    "final",
+    "novelai",
+    "output",
+    "result",
+    "tag",
+    "tags",
+}
+_REASONING_TAG_RE = re.compile(
+    r"(?<![a-zA-Z0-9_])(?:[0-9]+(?:girls?|boys?)|"
+    r"[a-zA-Z][a-zA-Z0-9_{}\[\]#:.\-]*(?:\s*\([^()\u4e00-\u9fff]+\))?|[0-9]{4})"
+)
+
+
+def _preview_model_text(text: str | None, limit: int = 600) -> str:
+    """生成适合日志输出的模型文本预览。"""
+    if not text:
+        return "<empty>"
+    normalized = text.replace("\r", "\\r").replace("\n", "\\n")
+    if len(normalized) <= limit:
+        return normalized
+    return f"{normalized[:limit]}...<truncated {len(normalized) - limit} chars>"
+
+
+def _looks_like_prompt_output(text: str) -> bool:
+    """判断文本是否像可直接解析的英文绘图提示词。"""
+    stripped = text.strip().strip("`")
+    if not stripped or _CJK_RE.search(stripped):
+        return False
+    if stripped.startswith("{") and stripped.endswith("}"):
+        return True
+    return "," in stripped and bool(re.search(r"[a-zA-Z]", stripped))
+
+
+def _is_multi_prompt(system_prompt: str) -> bool:
+    """判断当前转换是否使用多人提示词。"""
+    return "char1" in system_prompt or system_prompt == PROMPT_CONVERSION_SYSTEM_MULTI
+
+
+def _format_mentioned_character_candidates(source: str) -> str:
+    """把用户明确点名的本地角色 tag 注入候选，避免在线检索漏召回。"""
+    mentioned_tags = _mentioned_character_tags(source)
+    if not mentioned_tags:
+        return ""
+
+    character_items = {str(item["tag"]): item for item in _load_character_tags()}
+    lines = ["<local_character_candidates>"]
+    lines.append("用户原文明确点名以下本地角色，角色 tag 必须优先使用：")
+    for tag in mentioned_tags:
+        item = character_items.get(tag, {})
+        cn_name = str(item.get("cn_name", "")).strip()
+        aliases = item.get("aliases", [])
+        alias_text = ""
+        if isinstance(aliases, list) and aliases:
+            alias_text = f"；别名：{', '.join(str(alias) for alias in aliases[:4])}"
+        cn_text = f"{cn_name} → " if cn_name else ""
+        lines.append(f"- {cn_text}{tag}{alias_text}")
+    lines.append("</local_character_candidates>")
+    return "\n".join(lines)
+
+
+def _normalize_reasoning_tag(raw_tag: str) -> str:
+    """清洗 reasoning 中夹杂中文说明的单个英文 tag。"""
+    tags = _normalize_reasoning_tags(raw_tag)
+    return tags[-1] if tags else ""
+
+
+def _normalize_reasoning_tags(raw_text: str) -> list[str]:
+    """清洗 reasoning 片段中夹杂中文说明的英文 tag。"""
+    text = raw_text.strip().strip("`'\"")
+    tags: list[str] = []
+    for match in _REASONING_TAG_RE.finditer(text):
+        cleaned = match.group(0).strip("_-:.")
+        if not cleaned or cleaned.lower() in _REASONING_TAG_STOPWORDS:
+            continue
+        if len(cleaned) == 1 and not cleaned.isdigit():
+            continue
+        if _CJK_RE.search(cleaned):
+            continue
+        tag = cleaned.replace("-", "_")
+        if tag not in tags:
+            tags.append(tag)
+    return tags
+
+
+def _extract_tag_list_from_reasoning(reasoning: str, *, multi_mode: bool) -> str | None:
+    """从中文 reasoning 中抽取英文 tag 列表。"""
+    tag_counts: dict[str, int] = {}
+    tag_order: list[str] = []
+    for part in reasoning.split(","):
+        for tag in _normalize_reasoning_tags(part):
+            lower_tag = tag.lower()
+            if not multi_mode and (_MULTI_COUNT_RE.match(lower_tag) or lower_tag.startswith("char")):
+                continue
+            if lower_tag not in tag_counts:
+                tag_counts[lower_tag] = 0
+                tag_order.append(tag)
+            tag_counts[lower_tag] += 1
+
+    selected: list[str] = []
+    selected_keys: set[str] = set()
+    for tag in tag_order:
+        key = tag.lower()
+        if tag_counts[key] < 2 and key not in {"solo", "1girl", "1boy", "scenery", "year", "2025"}:
+            continue
+        if key == "year":
+            continue
+        if key in selected_keys:
+            continue
+        selected.append(tag)
+        selected_keys.add(key)
+
+    if "year 2025" not in selected_keys and "2025" in selected_keys:
+        selected = ["year 2025" if tag == "2025" else tag for tag in selected]
+        selected_keys.add("year 2025")
+    elif "year 2025" not in selected_keys:
+        selected.append("year 2025")
+
+    if not multi_mode and "1girl" in selected_keys and "solo" not in selected_keys:
+        selected.insert(0, "solo")
+        selected_keys.add("solo")
+    if not multi_mode and "solo" in selected_keys and "1girl" not in selected_keys and "1boy" not in selected_keys:
+        selected.insert(1, "1girl")
+        selected_keys.add("1girl")
+    if not multi_mode:
+        leading = [tag for tag in ("solo", "1girl", "1boy") if tag in selected_keys]
+        rest = [tag for tag in selected if tag not in {"solo", "1girl", "1boy"}]
+        selected = leading + rest
+
+    if len(selected) < 4:
+        return None
+    return ", ".join(selected)
+
+
+def _extract_reasoning_output_candidates(reasoning: str | None, *, multi_mode: bool = False) -> list[str]:
+    """从 reasoning_content 中保守提取可能的最终提示词。"""
+    if not reasoning:
+        return []
+
+    candidates: list[str] = []
+
+    def append_candidate(value: str) -> None:
+        cleaned = value.strip().strip("`").strip()
+        if not multi_mode:
+            if re.search(r"\bchar\d+(?:\[[A-E][1-5]\])?\s*:", cleaned, re.IGNORECASE):
+                return
+            first_tag = cleaned.split(",", 1)[0].strip().lower()
+            if _MULTI_COUNT_RE.match(first_tag):
+                return
+            cleaned = "\n".join(
+                line for line in cleaned.splitlines()
+                if not _CHAR_LINE_RE.match(line.strip())
+            ).strip()
+        if cleaned and cleaned not in candidates:
+            candidates.append(cleaned)
+
+    for block in _JSON_BLOCK_RE.findall(reasoning):
+        append_candidate(block)
+
+    for marker_match in _FINAL_OUTPUT_MARKER_RE.finditer(reasoning):
+        append_candidate(marker_match.group(1))
+
+    if not candidates:
+        lines = [line.strip().strip("`").strip() for line in reasoning.splitlines()]
+        for line in reversed(lines):
+            if _looks_like_prompt_output(line):
+                append_candidate(line)
+                break
+
+    if not candidates:
+        stripped = reasoning.strip()
+        if _looks_like_prompt_output(stripped):
+            append_candidate(stripped)
+
+    extracted_tags = _extract_tag_list_from_reasoning(reasoning, multi_mode=multi_mode)
+    if extracted_tags:
+        append_candidate(extracted_tags)
+
+    return candidates
+
+
+def _response_text_candidates(
+    message: str | None,
+    collected: str | None,
+    reasoning: str | None,
+    *,
+    multi_mode: bool = False,
+) -> list[tuple[str, str]]:
+    """按可靠性顺序返回可尝试解析的响应文本。"""
+    candidates: list[tuple[str, str]] = []
+    for source_name, value in (("message", message), ("collected", collected)):
+        cleaned = (value or "").strip()
+        if cleaned:
+            candidates.append((source_name, cleaned))
+
+    if not candidates:
+        for candidate in _extract_reasoning_output_candidates(reasoning, multi_mode=multi_mode):
+            candidates.append(("reasoning_content", candidate))
+
+    return candidates
+
+
+def _log_empty_response_preview(
+    message: str | None,
+    collected: str | None,
+    reasoning: str | None,
+) -> None:
+    """记录模型空响应时的安全截断预览，便于排查字段解析问题。"""
+    logger.warning(
+        "模型响应预览："
+        f"message={_preview_model_text(message)}, "
+        f"collected={_preview_model_text(collected)}, "
+        f"reasoning={_preview_model_text(reasoning)}"
+    )
 
 
 def _normalize_tag_key(tag: str) -> str:
@@ -364,7 +586,7 @@ def _parse_conversion_output(raw: str) -> PromptConversionResult:
 def _build_retry_system_prompt(source_system_prompt: str) -> str:
     """构建重试用极简系统提示词，降低模型因复杂规则空回的概率。"""
 
-    is_multi = "char1" in source_system_prompt or "多人" in source_system_prompt
+    is_multi = _is_multi_prompt(source_system_prompt)
     if is_multi:
         return """
 你只做中文到 NovelAI Danbooru 英文 tags 转换。
@@ -421,12 +643,21 @@ async def convert_to_english_prompt(
             logger.warning(f"Tag 检索异常，跳过: {exc}")
 
     # 替换占位符；无候选时移除占位符
+    local_character_block = _format_mentioned_character_candidates(source)
+    if local_character_block:
+        tag_candidates_block = (
+            f"{local_character_block}\n\n{tag_candidates_block}"
+            if tag_candidates_block else local_character_block
+        )
+        logger.info("已注入本地角色候选，优先约束明确点名角色 tag")
+
     system_prompt = system_prompt.replace(
         "{{TAG_CANDIDATES_PLACEHOLDER}}", tag_candidates_block
     )
 
     max_retries = config.prompt.max_retries
     last_error: Exception | None = None
+    multi_mode = _is_multi_prompt(system_prompt)
     retry_system_prompt = _build_retry_system_prompt(system_prompt)
     if tag_candidates_block:
         retry_system_prompt = f"{retry_system_prompt}\n\n{tag_candidates_block}"
@@ -455,7 +686,18 @@ async def convert_to_english_prompt(
                 continue
             raise ImageDrawerError(f"提示词转换请求失败（已重试 {max_retries} 次）：{exc}") from exc
 
-        raw = (response.message or collected or "").strip()
+        response_candidates = _response_text_candidates(
+            response.message,
+            collected,
+            response.reasoning_content,
+            multi_mode=multi_mode,
+        )
+        raw = response_candidates[0][1] if response_candidates else ""
+        if response_candidates and response_candidates[0][0] == "reasoning_content":
+            logger.warning(
+                "模型最终文本为空，已从 reasoning_content 中提取疑似提示词："
+                f"{_preview_model_text(raw)}"
+            )
         
         # 空响应检测与处理
         if not raw:
@@ -468,6 +710,11 @@ async def convert_to_english_prompt(
                 f"message_len={message_len}, collected_len={collected_len}, "
                 f"reasoning_len={reasoning_len}, tool_calls={call_count}"
             )
+            _log_empty_response_preview(
+                response.message,
+                collected,
+                response.reasoning_content,
+            )
             if response.reasoning_content:
                 logger.warning("模型只有 reasoning_content，没有最终文本输出。")
             last_error = ImageDrawerError("模型返回了空内容")
@@ -476,15 +723,23 @@ async def convert_to_english_prompt(
                 continue
             raise ImageDrawerError(f"模型持续返回空内容（已重试 {max_retries} 次）") from last_error
         
-        try:
-            result = _parse_conversion_output(raw)
-            return _enforce_mentioned_character_tags(source, result)
-        except ImageDrawerError as exc:
-            last_error = exc
-            if attempt < max_retries:
-                logger.warning(f"提示词解析失败（第 {attempt + 1} 次），重试中：{exc}")
-                continue
-            raise ImageDrawerError(f"转换后的提示词不符合要求（已重试 {max_retries} 次）：{exc}") from exc
+        for source_name, candidate in response_candidates:
+            try:
+                result = _parse_conversion_output(candidate)
+                if source_name == "reasoning_content":
+                    logger.warning("已使用 reasoning_content 中提取的内容作为提示词转换结果。")
+                return _enforce_mentioned_character_tags(source, result)
+            except ImageDrawerError as exc:
+                last_error = exc
+                logger.warning(
+                    f"提示词解析候选失败（第 {attempt + 1} 次，来源={source_name}）：{exc}；"
+                    f"preview={_preview_model_text(candidate)}"
+                )
+
+        if attempt < max_retries:
+            logger.warning(f"提示词解析失败（第 {attempt + 1} 次），重试中：{last_error}")
+            continue
+        raise ImageDrawerError(f"转换后的提示词不符合要求（已重试 {max_retries} 次）：{last_error}") from last_error
 
     # 理论上不会到达，但作为安全网
     raise ImageDrawerError(f"提示词转换失败（已重试 {max_retries} 次）：{last_error}") from last_error

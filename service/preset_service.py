@@ -1,4 +1,4 @@
-"""预设解析与首次上传缓存。"""
+"""预设解析与参考图准备。"""
 
 from __future__ import annotations
 
@@ -15,10 +15,7 @@ from ..config import (
 )
 from ..store import (
     PresetStoreError,
-    copy_character_image,
-    get_character_cache,
     get_vibe_cache,
-    remember_character_cache,
     remember_vibe_cache,
 )
 
@@ -91,23 +88,10 @@ def _is_selfie_request(user_text: str, config: NaiDrawerConfig) -> bool:
 
 
 async def ensure_character_ready(name: str, entry: CharacterPresetEntry, config: NaiDrawerConfig) -> dict[str, Any]:
-    """确保角色参考已复制到 data 目录。"""
+    """按配置路径读取角色参考图。"""
 
     source = Path(entry.image_path.strip())
-    cached = get_character_cache(name)
-    if cached and cached.source_path == source.as_posix() and Path(cached.stored_path).exists():
-        image = encode_image_file(cached.stored_path)
-    else:
-        stored = copy_character_image(name, source)
-        remember_character_cache(
-            name,
-            stored_path=stored,
-            source_path=source,
-            reference_type=entry.type,
-            fidelity=entry.fidelity,
-            strength=entry.strength,
-        )
-        image = encode_image_file(stored.as_posix())
+    image = encode_image_file(source.as_posix())
 
     return {
         "character_references": [
@@ -158,16 +142,9 @@ async def ensure_vibe_ready(name: str, entry: VibePresetEntry, config: NaiDrawer
 
 
 async def warm_up_presets(config: NaiDrawerConfig) -> None:
-    """插件加载时预热已启用的预设。"""
+    """插件加载时预热需要服务端缓存的 Vibe 预设。"""
 
-    characters = _iter_character_presets(config)
     vibes = _iter_vibe_presets(config)
-
-    for name, entry in characters.items():
-        try:
-            await ensure_character_ready(name, entry, config)
-        except (ImageDrawerError, PresetStoreError):
-            continue
 
     for name, entry in vibes.items():
         try:

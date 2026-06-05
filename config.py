@@ -19,7 +19,7 @@ class CharacterPresetEntry(SectionBase):
 
     image_path: str = Field(
         default="",
-        description="本地角色参考图路径。首次绘图时会复制到 data 目录并上传。",
+        description="本地角色参考图路径。每次使用角色参考时都会按该路径读取。",
         label="参考图路径",
         tag="file",
     )

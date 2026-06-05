@@ -25,11 +25,12 @@ NovelAI 二次元图片生成插件，通过 OpenAI 兼容接口调用 NovelAI �
 
 ```text
 /nai 一个白裙女孩站在森林里，柔和光线
+/nai0 1girl, solo, white_dress, forest, soft lighting
 /naim 两个女孩在咖啡厅里聊天
 /nai 自拍
 ```
 
-`/nai` 用于单人绘图，支持角色参考图和自拍模式；`/naim` 用于多人场景，不加载角色参考图。两者都会把自然语言转换为英文 Danbooru tag 后再调用绘图 API。中文、日文、韩文描述会自动走转换模型；留空 `prompt.model_name` 时使用 `model_tasks.sub_actor`。
+`/nai` 用于单人绘图，支持角色参考图和自拍模式；`/nai0` 用于纯英文 Danbooru tags 直通绘图，不调用提示词翻译模型；`/naim` 用于多人场景，不加载角色参考图。`/nai` 和 `/naim` 会把自然语言转换为英文 Danbooru tag 后再调用绘图 API。中文、日文、韩文描述会自动走转换模型；留空 `prompt.model_name` 时使用 `model_tasks.sub_actor`。
 
 ### 方式二：LLM 自主调用
 
@@ -52,7 +53,7 @@ NovelAI 二次元图片生成插件，通过 OpenAI 兼容接口调用 NovelAI �
 config/plugins/nai_drawer/config.toml
 ```
 
-运行时缓存（首次上传后的 Vibe cache_id、复制的角色参考图）存放在：
+运行时缓存（首次上传后的 Vibe cache_id、复制的 Vibe 参考图）存放在：
 
 ```text
 data/nai_drawer/
@@ -338,7 +339,7 @@ alias_names = ["小看板"]  # 角色别名，识别到别名也会触发该角�
 enabled = true           # 是否启用
 ```
 
-首次绘图时会复制图片到 `data/nai_drawer/characters/` 并上传。
+角色参考图不会复制到 `data/` 目录；每次使用角色参考时都会按 `image_path` 当前配置路径重新读取，替换图片后可直接生效。
 
 ### Vibe 画风迁移
 

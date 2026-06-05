@@ -2,7 +2,7 @@
   "name": "nai_drawer",
   "display_name": "NAI Drawer",
   "version": "0.2.0",
-  "description": "NovelAI 绘图插件，支持 /nai 单人绘图、/naim 多人绘图、角色参考、Vibe 与画风配置。",
+  "description": "NovelAI 绘图插件，支持 /nai 单人绘图、/nai0 英文 tag 直通、/naim 多人绘图、角色参考、Vibe 与画风配置。",
   "author": "tuercha、阿巴",
   "dependencies": {
     "plugins": [],
@@ -12,6 +12,12 @@
     {
       "component_type": "command",
       "component_name": "nai",
+      "dependencies": [],
+      "enabled": true
+    },
+    {
+      "component_type": "command",
+      "component_name": "nai0",
       "dependencies": [],
       "enabled": true
     },
